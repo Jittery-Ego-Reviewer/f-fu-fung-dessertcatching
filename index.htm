@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>接甜品大作戰 - 花音練習</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            -webkit-user-select: none;
+            user-select: none;
+            background-color: #fef08a; /* Cheerful yellow background for the page */
+            background-image: radial-gradient(#fde047 20%, transparent 20%), radial-gradient(#fde047 20%, transparent 20%);
+            background-size: 40px 40px;
+            background-position: 0 0, 20px 20px;
+        }
+        #game-wrapper {
+            /* Prevent pull-to-refresh and scroll ONLY on the game canvas, allowing the page to scroll */
+            touch-action: none; 
+            transition: all 0.3s ease;
+        }
+        @keyframes popIn {
+            0% { transform: scale(0.8) translateY(20px); opacity: 0; }
+            100% { transform: scale(1) translateY(0); opacity: 1; }
+        }
+        .animate-pop {
+            animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+        .animate-float {
+            animation: float 3s ease-in-out infinite;
+        }
+        @keyframes pulse-combo {
+            0%, 100% { transform: scale(1); color: #f97316; }
+            50% { transform: scale(1.1); color: #ef4444; }
+        }
+        .combo-text {
+            animation: pulse-combo 0.5s infinite;
+        }
+    </style>
+</head>
+<body class="m-0 flex flex-col items-center justify-center min-h-screen w-full text-slate-800 font-sans p-4 sm:p-8">
+
+    <!-- Header for scrolling context -->
+    <h1 class="text-3xl sm:text-4xl font-black text-amber-800 mb-6 drop-shadow-md text-center">
+        動物甜品大作戰 🍦
+    </h1>
+
+    <!-- Game Container -->
+    <div id="game-wrapper" class="relative w-full max-w-[700px] aspect-[3/4] sm:aspect-square md:aspect-[4/3] max-h-[80vh] overflow-hidden rounded-3xl shadow-2xl border-4 border-amber-600 bg-sky-200">
+        
+        <!-- The Game Canvas -->
+        <canvas id="gameCanvas" class="block w-full h-full"></canvas>
+
+        <!-- UI Overlay: Heads Up Display (Score, Lives, Combo) -->
+        <div id="hudUI" class="absolute top-0 left-0 w-full p-4 pointer-events-none z-10 hidden flex justify-between items-start">
+            <div class="flex flex-col">
+                <span class="text-xl sm:text-2xl font-black text-amber-900 bg-white/70 px-4 py-1 rounded-full shadow-sm">
+                    分數: <span id="currentScore" class="text-amber-600">0</span>
+                </span>
+                <span id="comboDisplay" class="text-lg sm:text-xl font-black mt-2 hidden combo-text bg-white/80 px-3 py-1 rounded-full shadow-sm w-max">
+                    🔥 連擊 x<span id="comboCount">0</span>
+                </span>
+            </div>
+            <div id="livesDisplay" class="text-2xl sm:text-3xl bg-white/70 px-3 py-1 rounded-full shadow-sm tracking-widest">
+                ❤️❤️❤️
+            </div>
+        </div>
+
+        <!-- UI Overlay: Start Screen -->
+        <div id="startScreen" class="absolute inset-0 flex flex-col items-center justify-center bg-black/50 z-20 p-4 sm:p-6 text-center">
+            <div class="bg-white/90 p-6 sm:p-8 rounded-3xl shadow-2xl flex flex-col items-center w-full max-w-[450px] border-4 border-amber-300 backdrop-blur-sm max-h-full overflow-y-auto">
+                <div id="floatingAvatar" class="text-6xl sm:text-7xl mb-4 animate-float select-none flex-shrink-0">🐘</div>
+                <h2 class="text-3xl sm:text-4xl font-black text-amber-600 mb-2 drop-shadow-sm tracking-wider flex-shrink-0">滑動接甜品!</h2>
+                <p class="text-amber-800 mb-6 text-base sm:text-lg font-bold flex-shrink-0">/f-/花音發音練習</p>
+                
+                <!-- Avatar Selection -->
+                <div class="mb-6 flex flex-col items-center w-full flex-shrink-0">
+                    <span class="text-slate-600 text-sm mb-2 font-bold bg-slate-100 px-3 py-1 rounded-full">選擇你的動物角色</span>
+                    <div class="flex flex-wrap justify-center gap-2 sm:gap-4 mt-2" id="avatarSelection">
+                        <!-- Animals: 🐘, 🦏, 🦒, 🦁, 🦓 -->
+                        <button class="avatar-btn text-3xl sm:text-5xl p-2 rounded-2xl border-4 border-amber-500 bg-amber-100 scale-110 shadow-lg transition-all" data-avatar="🐘">🐘</button>
+                        <button class="avatar-btn text-3xl sm:text-5xl p-2 rounded-2xl border-4 border-transparent bg-slate-100 hover:bg-slate-200 transition-all" data-avatar="🦏">🦏</button>
+                        <button class="avatar-btn text-3xl sm:text-5xl p-2 rounded-2xl border-4 border-transparent bg-slate-100 hover:bg-slate-200 transition-all" data-avatar="🦒">🦒</button>
+                        <button class="avatar-btn text-3xl sm:text-5xl p-2 rounded-2xl border-4 border-transparent bg-slate-100 hover:bg-slate-200 transition-all" data-avatar="🦁">🦁</button>
+                        <button class="avatar-btn text-3xl sm:text-5xl p-2 rounded-2xl border-4 border-transparent bg-slate-100 hover:bg-slate-200 transition-all" data-avatar="🦓">🦓</button>
+                    </div>
+                </div>
+
+                <div class="text-slate-600 mb-6 text-sm bg-slate-100 px-4 py-3 rounded-xl w-full text-left leading-relaxed font-medium flex-shrink-0">
+                    🎮 左右滑動接住 <span class="text-lg">🍦🍧🍨🧁</span><br>
+                    ⚠️ 避開 <span class="text-lg">💣💩</span> (扣減 ❤️)<br>
+                    🗣️ 每接中 3-5 次會進行讀字練習！
+                </div>
+                <button id="startBtn" class="w-full py-4 bg-green-500 hover:bg-green-400 active:bg-green-600 text-white font-bold rounded-2xl text-2xl shadow-[0_6px_0_#166534] active:shadow-[0_0px_0_#166534] active:translate-y-[6px] transition-all flex-shrink-0 mb-2 mt-auto">
+                    開始遊戲
+                </button>
+            </div>
+        </div>
+
+        <!-- UI Overlay: Game Over -->
+        <div id="gameOverScreen" class="absolute inset-0 flex flex-col items-center justify-center bg-black/70 z-30 p-6 hidden backdrop-blur-sm">
+            <div class="bg-white p-8 rounded-3xl shadow-2xl flex flex-col items-center text-center animate-pop border-4 border-red-400 w-full max-w-[350px]">
+                <div class="text-6xl mb-2">😭</div>
+                <h2 class="text-4xl font-black text-slate-800 mb-2">遊戲結束!</h2>
+                <div class="flex gap-8 my-6 justify-center w-full bg-slate-100 p-4 rounded-2xl">
+                    <div class="flex flex-col items-center">
+                        <span class="text-sm text-slate-500 font-bold uppercase tracking-wider mb-1">分數</span>
+                        <span id="finalScore" class="text-5xl font-black text-blue-500">0</span>
+                    </div>
+                    <div class="flex flex-col items-center">
+                        <span class="text-sm text-slate-500 font-bold uppercase tracking-wider mb-1">最高分</span>
+                        <span id="bestScore" class="text-5xl font-black text-orange-500">0</span>
+                    </div>
+                </div>
+                <div class="flex flex-col gap-3 w-full mt-2">
+                    <button id="reviveBtn" class="w-full px-8 py-4 bg-purple-500 hover:bg-purple-400 active:bg-purple-600 text-white font-black rounded-2xl text-xl shadow-[0_6px_0_#581c87] active:shadow-[0_0px_0_#581c87] active:translate-y-[6px] transition-all flex items-center justify-center gap-2">
+                        <span>🎤</span> 讀字復活 (滿血)
+                    </button>
+                    <button id="restartBtn" class="w-full px-8 py-4 bg-sky-500 hover:bg-sky-400 active:bg-sky-600 text-white font-black rounded-2xl text-xl shadow-[0_6px_0_#0284c7] active:shadow-[0_0px_0_#0284c7] active:translate-y-[6px] transition-all">
+                        重新開始
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- UI Overlay: Revive Screen -->
+        <div id="reviveScreen" class="absolute inset-0 flex flex-col items-center justify-center bg-purple-900/90 backdrop-blur-md z-40 p-6 hidden">
+            <div class="bg-white px-8 py-10 rounded-[3rem] shadow-2xl flex flex-col items-center text-center animate-pop w-full max-w-[350px] border-8 border-purple-300">
+                <span class="text-purple-600 font-bold mb-4 text-base bg-purple-100 px-4 py-2 rounded-full shadow-inner">讀出這3個字復活！</span>
+                
+                <div id="reviveWords" class="text-5xl mb-8 mt-2 font-black text-slate-800 leading-relaxed flex flex-col gap-4 text-center w-full">
+                    <!-- Words go here -->
+                </div>
+                
+                <div class="flex items-center justify-center gap-3 bg-slate-50 rounded-2xl p-4 w-full mb-6 border-2 border-slate-200">
+                    <div class="animate-pulse text-4xl drop-shadow-md">🎤</div>
+                    <span class="text-slate-500 font-bold text-xl animate-pulse tracking-widest">聆聽中...</span>
+                </div>
+                
+                <button id="holdReviveBtn" class="relative overflow-hidden w-full px-8 py-4 bg-green-500 text-white font-black rounded-2xl text-2xl shadow-[0_6px_0_#166534] transition-all select-none touch-none">
+                    <div id="holdProgress" class="absolute left-0 top-0 bottom-0 bg-green-400 w-0 pointer-events-none"></div>
+                    <span class="relative z-10 pointer-events-none">長按 2 秒繼續</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- UI Overlay: Practice Pop-up -->
+        <div id="practiceScreen" class="absolute inset-0 flex flex-col items-center justify-center bg-blue-900/90 backdrop-blur-md z-40 p-6 hidden">
+            <div class="bg-white px-8 py-10 rounded-[3rem] shadow-2xl flex flex-col items-center text-center animate-pop w-full max-w-[350px] border-8 border-blue-300">
+                <span class="text-blue-500 font-bold mb-4 text-lg bg-blue-100 px-6 py-2 rounded-full shadow-inner">做得好！讀出這個字 🗣️</span>
+                
+                <div id="practiceWord" class="text-7xl mb-8 mt-4 font-black text-slate-800 leading-tight">
+                    <!-- Word goes here -->
+                </div>
+                
+                <button id="continueBtn" class="w-full px-8 py-4 bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-white font-black rounded-2xl text-2xl shadow-[0_6px_0_#b45309] active:shadow-[0_0px_0_#b45309] active:translate-y-[6px] transition-all">
+                    繼續接甜品！
+                </button>
+            </div>
+        </div>
+
+        <!-- UI Overlay: Countdown -->
+        <div id="countdownScreen" class="absolute inset-0 flex flex-col items-center justify-center z-30 hidden pointer-events-none bg-black/20 backdrop-blur-sm">
+            <span id="countdownText" class="text-9xl font-black text-white drop-shadow-[0_8px_8px_rgba(0,0,0,0.5)] animate-pop">3</span>
+        </div>
+
+    </div>
+
+    <script>
+        // --- Word List (Retained from original) ---
+        const practiceWords = [
+            '付💰', '呼🗣️', '副', '夫🏌️', '府', '苦😣', '富💎', '附', '虎🐅', 
+            '父👨‍👧', '扶', '乎', '甫', '敷', '撫🫳', '腐', '膚', '孚', '枯🥀', 
+            '咐🗣️', '斧🪓', '褲👖', '孵🐣', '負-', '封✉️', '風🌬️', '豐🍗🍛🍣🍤🍝',
+            '鋒🔪', '蜂🐝', '縫🧵', '鳳🐦‍🔥', '峰🏔️', '灰🩶', '悔😞', '喙🦜'
+        ];
+
+        const DESSERTS = ['🍦', '🍧', '🍨', '🧁'];
+        const HAZARDS = ['💣', '💩'];
+
+        // --- Game Variables ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const wrapper = document.getElementById('game-wrapper');
+        
+        let frames = 0;
+        let score = 0;
+        let highScore = 0;
+        let lives = 3;
+        let combo = 0;
+        let catchesSinceLastPractice = 0;
+        let nextPracticeTarget = 3; 
+        
+        let gameState = 'START'; // START, PLAYING, PRACTICE, COUNTDOWN, GAMEOVER
+        let currentAvatar = '🐘'; 
+        
+        // Logical resolution for canvas
+        let C_WIDTH = 800;
+        let C_HEIGHT = 1000;
+        
+        // --- Entities ---
+        const player = {
+            x: C_WIDTH / 2,
+            y: C_HEIGHT - 100,
+            targetX: C_WIDTH / 2,
+            width: 100,
+            height: 100,
+            speed: 0.15 // lerp factor
+        };
+
+        const fallingItems = [];
+        const particles = []; // For explosion/catch effects
+        const clouds = []; // Background aesthetics
+
+        // Gameplay Tuning
+        let baseFallSpeed = 5;
+        let speedMultiplier = 1.0;
+        let spawnRate = 70; // Spawn every X frames
+
+        // --- Audio Context (Synthesized sounds) ---
+        let audioCtx;
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function playTone(freq, type, duration, vol=0.1, slideFreq=null) {
+            if(!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            
+            if (slideFreq) {
+                osc.frequency.exponentialRampToValueAtTime(slideFreq, audioCtx.currentTime + duration);
+            }
+            
+            gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+            
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+        }
+
+        function playCatchSound() {
+            // Happy blip
+            playTone(600, 'sine', 0.1, 0.1, 800);
+            setTimeout(() => playTone(1200, 'sine', 0.15, 0.1, 1600), 50);
+        }
+
+        function playDamageSound() {
+            // Deep rough sound
+            playTone(150, 'sawtooth', 0.3, 0.2, 50);
+        }
+
+        function playGameOverSound() {
+            playTone(300, 'square', 0.2, 0.2, 100);
+            setTimeout(() => playTone(250, 'square', 0.3, 0.2, 80), 200);
+            setTimeout(() => playTone(200, 'square', 0.5, 0.2, 50), 500);
+        }
+
+        function playComboSound(currentCombo) {
+            // Pitch increases with combo size
+            const baseFreq = 400 + (Math.min(currentCombo, 10) * 50);
+            playTone(baseFreq, 'triangle', 0.1, 0.1, baseFreq * 1.5);
+        }
+
+        // --- Core Functions ---
+        function resizeCanvas() {
+            // Use client dimensions to maintain crispness and aspect ratio scaling
+            const rect = wrapper.getBoundingClientRect();
+            C_WIDTH = 800; 
+            C_HEIGHT = 800 * (rect.height / rect.width);
+            canvas.width = C_WIDTH;
+            canvas.height = C_HEIGHT;
+            player.y = C_HEIGHT - Math.max(120, C_HEIGHT * 0.12);
+        }
+
+        function initBackground() {
+            clouds.length = 0;
+            for(let i=0; i<6; i++) {
+                clouds.push({
+                    x: Math.random() * C_WIDTH,
+                    y: Math.random() * (C_HEIGHT * 0.6),
+                    size: Math.random() * 40 + 40,
+                    speed: Math.random() * 0.5 + 0.2
+                });
+            }
+        }
+
+        function createParticles(x, y, emoji) {
+            for(let i=0; i<5; i++) {
+                particles.push({
+                    x: x, y: y,
+                    vx: (Math.random() - 0.5) * 10,
+                    vy: (Math.random() - 0.5) * 10 - 5,
+                    life: 1.0,
+                    emoji: emoji,
+                    size: Math.random() * 20 + 20
+                });
+            }
+        }
+
+        function initGame() {
+            resizeCanvas();
+            player.x = C_WIDTH / 2;
+            player.targetX = C_WIDTH / 2;
+            fallingItems.length = 0;
+            particles.length = 0;
+            
+            score = 0;
+            lives = 3;
+            combo = 0;
+            catchesSinceLastPractice = 0;
+            speedMultiplier = 1.0;
+            frames = 0;
+            nextPracticeTarget = Math.floor(Math.random() * 3) + 3; // 3 to 5
+            
+            updateHUD();
+            initBackground();
+        }
+
+        function getRandomWord() {
+            return practiceWords[Math.floor(Math.random() * practiceWords.length)];
+        }
+
+        function getThreeRandomWords() {
+            let shuffled = [...practiceWords].sort(() => 0.5 - Math.random());
+            return shuffled.slice(0, 3);
+        }
+
+        function spawnItem() {
+            // 75% chance for dessert, 25% for hazard
+            const isHazard = Math.random() > 0.75;
+            let emojiList = isHazard ? HAZARDS : DESSERTS;
+            let emoji = emojiList[Math.floor(Math.random() * emojiList.length)];
+            
+            // Random X within bounds
+            const padding = 60;
+            const x = Math.random() * (C_WIDTH - padding * 2) + padding;
+            
+            fallingItems.push({
+                x: x,
+                y: -50,
+                type: isHazard ? 'hazard' : 'dessert',
+                emoji: emoji,
+                speed: baseFallSpeed * (Math.random() * 0.4 + 0.8), // Slight variation in individual speed
+                size: 60,
+                rotation: Math.random() * Math.PI * 2,
+                rotSpeed: (Math.random() - 0.5) * 0.1
+            });
+        }
+
+        function updateHUD() {
+            document.getElementById('currentScore').innerText = score;
+            
+            // Update Lives Display
+            let hearts = '';
+            for(let i=0; i<3; i++) {
+                hearts += (i < lives) ? '❤️' : '🖤';
+            }
+            document.getElementById('livesDisplay').innerText = hearts;
+
+            // Combo Display
+            const comboEl = document.getElementById('comboDisplay');
+            if (combo >= 2) {
+                comboEl.classList.remove('hidden');
+                document.getElementById('comboCount').innerText = combo;
+            } else {
+                comboEl.classList.add('hidden');
+            }
+        }
+
+        // Control Player Position
+        function handleMove(clientX) {
+            if (gameState !== 'PLAYING') return;
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            let newX = (clientX - rect.left) * scaleX;
+            
+            // Clamp to screen
+            const padding = player.width / 2;
+            if (newX < padding) newX = padding;
+            if (newX > C_WIDTH - padding) newX = C_WIDTH - padding;
+            
+            player.targetX = newX;
+        }
+
+        // Mouse/Touch Events
+        wrapper.addEventListener('touchmove', (e) => {
+            if(gameState === 'PLAYING' && e.cancelable) e.preventDefault(); // Prevent scroll while playing
+            handleMove(e.touches[0].clientX);
+        }, {passive: false});
+
+        wrapper.addEventListener('mousemove', (e) => {
+            handleMove(e.clientX);
+        });
+        
+        // Touch jump to spot
+        wrapper.addEventListener('touchstart', (e) => {
+            if (e.target.closest('button')) return;
+            if (gameState === 'PLAYING') handleMove(e.touches[0].clientX);
+        }, {passive: false});
+
+        // Unified Button Binder
+        function bindButton(id, callback) {
+            const btn = document.getElementById(id);
+            if (!btn) return;
+            let lastTriggerTime = 0;
+            const triggerAction = (e) => {
+                const now = Date.now();
+                if (now - lastTriggerTime < 300) return; 
+                lastTriggerTime = now;
+                initAudio();
+                callback(e);
+            };
+            btn.addEventListener('click', triggerAction);
+        }
+
+        bindButton('startBtn', () => {
+            initGame();
+            document.getElementById('startScreen').classList.add('hidden');
+            document.getElementById('hudUI').classList.remove('hidden');
+            startCountdown();
+        });
+        
+        bindButton('restartBtn', () => {
+            initGame();
+            document.getElementById('gameOverScreen').classList.add('hidden');
+            document.getElementById('hudUI').classList.remove('hidden');
+            startCountdown();
+        });
+        
+        bindButton('continueBtn', () => {
+            document.getElementById('practiceScreen').classList.add('hidden');
+            startCountdown();
+        });
+        
+        bindButton('reviveBtn', showReviveScreen);
+
+        // Hold-to-Revive logic
+        const holdBtn = document.getElementById('holdReviveBtn');
+        const holdProgress = document.getElementById('holdProgress');
+        let holdTimer;
+        let isHolding = false;
+
+        function startHold(e) {
+            if (e.cancelable) e.preventDefault();
+            if (isHolding) return;
+            isHolding = true;
+            holdProgress.style.transition = 'width 2s linear';
+            holdProgress.style.width = '100%';
+            initAudio(); 
+            holdTimer = setTimeout(reviveGame, 2000);
+        }
+
+        function endHold(e) {
+            if (e && e.cancelable) e.preventDefault();
+            isHolding = false;
+            clearTimeout(holdTimer);
+            holdProgress.style.transition = 'none';
+            holdProgress.style.width = '0%';
+        }
+
+        holdBtn.addEventListener('mousedown', startHold);
+        holdBtn.addEventListener('touchstart', startHold, { passive: false });
+        holdBtn.addEventListener('mouseup', endHold);
+        holdBtn.addEventListener('mouseleave', endHold);
+        holdBtn.addEventListener('touchend', endHold);
+        holdBtn.addEventListener('touchcancel', endHold);
+
+        // Avatar Selection Binding
+        const avatarBtns = document.querySelectorAll('.avatar-btn');
+        avatarBtns.forEach(btn => {
+            const handleAvatarSelect = (e) => {
+                initAudio();
+                currentAvatar = btn.getAttribute('data-avatar');
+                document.getElementById('floatingAvatar').innerText = currentAvatar;
+                avatarBtns.forEach(b => {
+                    if (b === btn) {
+                        b.className = 'avatar-btn text-3xl sm:text-5xl p-2 rounded-2xl border-4 border-amber-500 bg-amber-100 scale-110 shadow-lg transition-all';
+                    } else {
+                        b.className = 'avatar-btn text-3xl sm:text-5xl p-2 rounded-2xl border-4 border-transparent bg-slate-100 hover:bg-slate-200 transition-all';
+                    }
+                });
+            };
+            btn.addEventListener('click', handleAvatarSelect);
+        });
+
+        // --- State Management ---
+        function triggerPractice() {
+            gameState = 'PRACTICE';
+            const word = getRandomWord();
+            document.getElementById('practiceWord').innerText = word;
+            document.getElementById('practiceScreen').classList.remove('hidden');
+        }
+
+        function startCountdown() {
+            gameState = 'COUNTDOWN';
+            const cdScreen = document.getElementById('countdownScreen');
+            const cdText = document.getElementById('countdownText');
+            cdScreen.classList.remove('hidden');
+            
+            let count = 3;
+            cdText.innerText = count;
+            
+            const interval = setInterval(() => {
+                count--;
+                if (count > 0) {
+                    cdText.innerText = count;
+                    // Retrigger pop animation
+                    cdText.classList.remove('animate-pop');
+                    void cdText.offsetWidth; 
+                    cdText.classList.add('animate-pop');
+                } else {
+                    clearInterval(interval);
+                    cdScreen.classList.add('hidden');
+                    gameState = 'PLAYING';
+                }
+            }, 800);
+        }
+
+        function triggerGameOver() {
+            gameState = 'GAMEOVER';
+            if (score > highScore) highScore = score;
+            document.getElementById('finalScore').innerText = score;
+            document.getElementById('bestScore').innerText = highScore;
+            document.getElementById('hudUI').classList.add('hidden');
+            document.getElementById('gameOverScreen').classList.remove('hidden');
+            playGameOverSound();
+        }
+
+        function showReviveScreen() {
+            document.getElementById('gameOverScreen').classList.add('hidden');
+            const words = getThreeRandomWords();
+            document.getElementById('reviveWords').innerHTML = words.join('<br>');
+            document.getElementById('reviveScreen').classList.remove('hidden');
+            endHold();
+        }
+
+        function reviveGame() {
+            endHold();
+            document.getElementById('reviveScreen').classList.add('hidden');
+            lives = 3; // Full health restore
+            combo = 0;
+            // Clear hazards nearby so player doesn't instantly die
+            fallingItems.length = 0; 
+            updateHUD();
+            document.getElementById('hudUI').classList.remove('hidden');
+            startCountdown();
+        }
+
+        function drawBackground() {
+            // Sky gradient already handled by CSS mostly, but we can draw some clouds
+            ctx.clearRect(0, 0, C_WIDTH, C_HEIGHT);
+            
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+            clouds.forEach(c => {
+                ctx.beginPath();
+                ctx.arc(c.x, c.y, c.size, 0, Math.PI * 2);
+                ctx.arc(c.x + c.size*0.8, c.y - c.size*0.2, c.size*0.8, 0, Math.PI * 2);
+                ctx.arc(c.x - c.size*0.8, c.y - c.size*0.1, c.size*0.7, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // Ground
+            ctx.fillStyle = '#84cc16'; // Lime green ground
+            const groundY = C_HEIGHT - 60;
+            ctx.fillRect(0, groundY, C_WIDTH, 60);
+            
+            // Ground top highlight
+            ctx.fillStyle = '#a3e635';
+            ctx.fillRect(0, groundY, C_WIDTH, 15);
+        }
+
+        function updateParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.5; // gravity
+                p.life -= 0.03;
+                
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, p.life);
+                ctx.font = `${p.size}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(p.emoji, p.x, p.y);
+                ctx.restore();
+
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+        }
+
+        function renderGame() {
+            drawBackground();
+
+            // Draw clouds movement
+            if (gameState === 'PLAYING') {
+                clouds.forEach(c => {
+                    c.x -= c.speed;
+                    if (c.x < -c.size * 2) c.x = C_WIDTH + c.size * 2;
+                });
+            }
+
+            // Draw falling items
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            fallingItems.forEach(item => {
+                ctx.save();
+                ctx.translate(item.x, item.y);
+                ctx.rotate(item.rotation);
+                ctx.font = `${item.size}px Arial`;
+                // Add a subtle glow for desserts
+                if(item.type === 'dessert') {
+                    ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
+                    ctx.shadowBlur = 10;
+                }
+                ctx.fillText(item.emoji, 0, 0);
+                ctx.restore();
+            });
+
+            // Draw Player
+            ctx.save();
+            ctx.translate(player.x, player.y);
+            // Bobbing animation if playing
+            let bob = 0;
+            if(gameState === 'PLAYING') bob = Math.sin(frames * 0.1) * 5;
+            
+            ctx.font = `${player.width}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(currentAvatar, 0, bob);
+            ctx.restore();
+
+            updateParticles();
+        }
+
+        function gameLoop() {
+            requestAnimationFrame(gameLoop);
+            
+            renderGame();
+
+            if (gameState !== 'PLAYING') return;
+
+            frames++;
+
+            // Player physics (smooth follow)
+            player.x += (player.targetX - player.x) * player.speed;
+
+            // Spawning Logic
+            // Speed increases based on combo, max multiplier 2.5
+            speedMultiplier = Math.min(2.5, 1.0 + (combo * 0.05));
+            let currentSpawnRate = Math.max(30, spawnRate - Math.floor(combo * 1.5));
+
+            if (frames % currentSpawnRate === 0) {
+                spawnItem();
+            }
+
+            // Items Update & Collision
+            const catchRadius = (player.width / 2) + 20; // Generous catch hitbox
+            const groundY = C_HEIGHT - 60;
+
+            for (let i = fallingItems.length - 1; i >= 0; i--) {
+                let item = fallingItems[i];
+                
+                // Move item
+                item.y += item.speed * speedMultiplier;
+                item.rotation += item.rotSpeed;
+
+                // Collision Detection with Player
+                let dx = item.x - player.x;
+                let dy = item.y - player.y;
+                let dist = Math.sqrt(dx*dx + dy*dy);
+
+                if (dist < catchRadius) {
+                    // CAUGHT
+                    createParticles(item.x, item.y, item.emoji);
+                    
+                    if (item.type === 'dessert') {
+                        score++;
+                        combo++;
+                        catchesSinceLastPractice++;
+                        playCatchSound();
+                        if (combo > 1) playComboSound(combo);
+                    } else {
+                        // Caught hazard
+                        lives--;
+                        combo = 0;
+                        playDamageSound();
+                        
+                        // Flash background red
+                        document.getElementById('game-wrapper').style.backgroundColor = '#fca5a5';
+                        setTimeout(() => {
+                            if(gameState === 'PLAYING') document.getElementById('game-wrapper').style.backgroundColor = '';
+                        }, 200);
+
+                        if (lives <= 0) {
+                            updateHUD();
+                            triggerGameOver();
+                            fallingItems.splice(i, 1);
+                            continue;
+                        }
+                    }
+                    
+                    updateHUD();
+                    fallingItems.splice(i, 1);
+                    
+                    // Check Practice Trigger
+                    if (catchesSinceLastPractice >= nextPracticeTarget && lives > 0) {
+                        catchesSinceLastPractice = 0;
+                        nextPracticeTarget = Math.floor(Math.random() * 3) + 3;
+                        triggerPractice();
+                    }
+                    continue;
+                }
+
+                // Check Missed Item (Hit bottom)
+                if (item.y > groundY + item.size) {
+                    if (item.type === 'dessert') {
+                        // Missed a good item, reset combo
+                        combo = 0;
+                        updateHUD();
+                    } else {
+                        // Splat hazard on ground
+                        createParticles(item.x, groundY, item.emoji);
+                    }
+                    fallingItems.splice(i, 1);
+                }
+            }
+        }
+
+        // Initialize Canvas & Start Loop
+        window.onload = () => {
+            window.addEventListener('resize', resizeCanvas);
+            resizeCanvas();
+            initBackground();
+            renderGame(); // Draw initial screen
+            requestAnimationFrame(gameLoop);
+        };
+    </script>
+</body>
+</html>
